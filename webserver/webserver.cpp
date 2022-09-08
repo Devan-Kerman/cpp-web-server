@@ -1,28 +1,52 @@
 //
 // Created by devse on 8/29/2022.
 //
-
-
-using namespace std;
-
 #define WIN32_LEAN_AND_MEAN
 
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <stdlib.h>
-#include <stdio.h>
+
+#include <Windows.h>
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#include <cstdlib>
+#include <cstdio>
 #include <string>
 #include <format>
 #include <iostream>
+#include <sstream>
+#include <fstream>
+#include <filesystem>
+
+#include "http.h"
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
-int __cdecl main() {
-    std::string content = "<html><body>Hello World!</body></html>";
-    std::string formatted = std::vformat("HTTP/1.1 200 OK\nServer: Server\nContent-type: text/html\nContent-length: {}\n\n{}", std::make_format_args(content.size(), content));
+std::string readFile(const std::string &fileName) {
+    std::ifstream file(fileName);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+    return content;
+}
+
+void sendResponse(SOCKET &socket, const std::string &contentType, const std::string &content) {
+    std::stringstream outS;
+
+    http::write(http::response {
+        .version = "HTTP/1.1",
+        .code = "200",
+        .message = "OK",
+        .headers = {{"Content-Type", {contentType}}},
+        .body = content,
+    }, outS);
+
+    std::string out = outS.str();
+    send(socket, out.c_str(), out.size(), 0);
+}
+
+int __cdecl main(int argc, char** argv) {
+    std::cout << "Working directory: " << std::filesystem::current_path();
 
     // Initialize Winsock
     WSADATA socketApiData;
@@ -49,13 +73,13 @@ int __cdecl main() {
 
     SOCKET serverSocket = socket(socketId->ai_family, socketId->ai_socktype, socketId->ai_protocol);
     if (serverSocket == INVALID_SOCKET) {
-        printf("socket failed with error: %ld\n", WSAGetLastError());
+        printf("socket failed with error: %d\n", WSAGetLastError());
         freeaddrinfo(socketId);
         WSACleanup();
         return 1;
     }
 
-    int socketSetupErrorCode = bind(serverSocket, socketId->ai_addr, (int)socketId->ai_addrlen);
+    int socketSetupErrorCode = bind(serverSocket, socketId->ai_addr, (int) socketId->ai_addrlen);
     if (socketSetupErrorCode == SOCKET_ERROR) {
         printf("bind failed with error: %d\n", WSAGetLastError());
         freeaddrinfo(socketId);
@@ -76,7 +100,7 @@ int __cdecl main() {
 
     char buf[512];
     int bufLen = 512;
-    while(true) {
+    while (true) {
         SOCKET clientSocket = accept(serverSocket, NULL, NULL);
         if (clientSocket == INVALID_SOCKET) {
             printf("accept failed with error: %d\n", WSAGetLastError());
@@ -85,15 +109,50 @@ int __cdecl main() {
             return 1;
         }
 
+        std::string response;
         int read;
         do {
             read = recv(clientSocket, buf, bufLen, 0);
-            std::string response(buf, 0, read);
-            std::cout << response;
-        } while(read == bufLen);
+            std::string responseTemp(buf, 0, read);
+            response += responseTemp;
+        } while (read == bufLen);
 
-        std::printf("formatted: %d", formatted.size());
-        send(clientSocket, formatted.c_str(), formatted.size(), 0);
+        int ln = response.find('\n'), get = response.find("GET"), end = response.find("HTTP");
+        if (ln != std::string::npos && get != std::string::npos && end != std::string::npos && get < ln && end < ln && end > get) {
+            std::string query = response.substr(get+4, (end-1) - (get+4));
+            if(query == "/info.txt") {
+                std::string content = std::to_string(std::rand() % 100000);
+                sendResponse(clientSocket, "text/txt", content);
+            } else if(query == "/") {
+                std::string fileName = "../resources/index.html";
+                std::string content = readFile(fileName);
+                sendResponse(clientSocket, "text/html", content);
+            } else {
+                std::fstream fstream("../resources/"+query);
+                if(fstream) {
+                    std::stringstream buffer;
+                    buffer << fstream.rdbuf();
+                    std::string content = buffer.str();
+                    std::string contentType;
+
+                    if(query.ends_with(".png")) {
+                        contentType = "image/png";
+                    } else {
+                        contentType = "text/html";
+                    }
+                    sendResponse(clientSocket, contentType, content);
+                } else {
+                    std::string fileName = "../resources/404.html";
+                    std::string content = readFile(fileName);
+                    sendResponse(clientSocket, "text/html", content);
+                }
+
+            }
+        } else {
+            std::string fileName = "../resources/404.html";
+            std::string content = readFile(fileName);
+            sendResponse(clientSocket, "text/html", content);
+        }
         closesocket(clientSocket);
     }
 

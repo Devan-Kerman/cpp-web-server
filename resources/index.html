@@ -1,0 +1,36 @@
+<html>
+<script type="module">
+    const element = document.getElementById("content");
+    setInterval(() => {
+        fetch("/info.txt").then(value => value.text()).then(content => {
+            element.innerHTML = "Random Number: " + content;
+        });
+    }, 500);
+</script>
+<style>
+    body {
+        background-color: whitesmoke;
+        text-align: center;
+    }
+
+    p {
+        font-family: "Segoe UI","Roboto","Oxygen","Ubuntu","Cantarell","Fira Sans","Droid Sans","Helvetica Neue",sans-serif;
+        width: 50%;
+        height: 50%;
+        font-size: 100px;
+        color: ghostwhite;
+        background-color: #132f57;
+        border:10px solid #334f77;
+    }
+
+    #center {
+        display: flex;
+        justify-content: center;
+    }
+</style>
+<body>
+<div id="center">
+    <p id="content">Random Number: 6000</p>
+</div>
+</body>
+</html>

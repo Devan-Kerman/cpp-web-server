@@ -1,0 +1,32 @@
+<html>
+<head>
+    <style type="text/css">
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #test {
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: 0;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <iframe id="test"></iframe>
+</div>
+</body>
+<script>
+    var elementById = document.getElementById("test");
+    setInterval(() => {
+        elementById.src = "http://localhost:8080/6435";
+    }, 1000);
+</script>
+</html>
